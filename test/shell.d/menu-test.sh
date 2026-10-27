@@ -126,7 +126,7 @@ assert(
   'menu display rows carry their disabled state'
 )
 assert(
-  /function matchesQuery\(entry, query\) \{\s*\n\s*return MenuModel\.matchesQuery\(entry, query, root\.isVisible\(entry\) && !root\.isDisabled\(entry\)\)/.test(menuQml),
+  /function matchesQuery\(entry, query, typos\) \{\s*\n\s*var visible = root\.isVisible\(entry\) && !root\.isDisabled\(entry\)\s*\n\s*return typos \? MenuModel\.matchesQueryWithTypos\(entry, query, visible\) : MenuModel\.matchesQuery\(entry, query, visible\)/.test(menuQml),
   'menu search skips disabled rows, which belong to the submenu they sit in rather than a list of what you can do'
 )
 
@@ -134,6 +134,11 @@ const entry = merged.items['style.theme']
 assert(menu.matchesQuery(entry, 'theme', true), 'menu matches labels and aliases')
 assert(menu.matchesQuery(entry, 'colors', true), 'menu matches aliases')
 assert(!menu.matchesQuery(entry, 'missing', true), 'menu rejects missing terms')
+assert(!menu.matchesQuery(entry, 'thene', true) && menu.matchesQueryWithTypos(entry, 'thene', true), 'menu forgives a typo only in the typo search')
+assert(menu.matchesQueryWithTypos(entry, 'pikcer', true) && menu.matchesQueryWithTypos(entry, 'pikc theme', true), 'menu counts swapped letters as one typo, mid-word and beside exact terms')
+assert(!menu.matchesQueryWithTypos(entry, 'thx', true) && !menu.matchesQueryWithTypos(entry, 'thene', false), 'menu forgives no typo under four letters, and none in a hidden row')
+const bluetooth = menu.normalizeItem('bluetooth', { label: 'Bluetooth', action: 'x' })
+assert(menu.matchesQueryWithTypos(bluetooth, 'bluetoxx', true) && !menu.matchesQueryWithTypos(bluetooth, 'bluetxx', true), 'menu forgives two typos from eight letters, and only one below')
 assert(!menu.matchesQuery(entry, 'theme', false), 'menu hides invisible matches')
 assert(menu.searchScore(merged.items, entry, 'theme') < menu.searchScore(merged.items, entry, 'appearance'), 'menu scores name matches above description matches')
 
@@ -756,7 +761,7 @@ assert(
   'menu renders a disabled row faded, and leaves it at that'
 )
 assert(
-  /function rebuildDisplay\(\)[\s\S]*?root\.settleCursor\(\)/.test(menuQml),
+  /function rebuildDisplay\(typos\)[\s\S]*?root\.settleCursor\(\)/.test(menuQml),
   'menu parks the cursor on a selectable row after the rows change'
 )
 // A menu with nothing selectable in it has no cursor, and Return must not
