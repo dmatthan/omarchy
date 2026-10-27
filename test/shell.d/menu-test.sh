@@ -194,6 +194,35 @@ assert(
   'menu keeps a better-matching menu entry above a weaker app match'
 )
 
+// Runs Menu.qml's own search over the shipped menu. Foot is a typo away from
+// "font" but shares no "n" with it, so only a typo pass could show it there.
+const qmlFunction = (name, params) => new Function('root', 'MenuModel', 'displayModel', 'Qt', ...params,
+  `with (root) {${menuQml.match(new RegExp(`\\n  function ${name}\\(${params.join(', ')}\\) \\{([\\s\\S]*?)\\n  \\}\\n`))[1]}}`)
+const menuMatchesQuery = qmlFunction('matchesQuery', ['entry', 'query', 'typos'])
+const menuRebuildDisplay = qmlFunction('rebuildDisplay', ['typos'])
+const searchIds = query => {
+  const rows = []
+  const displayModel = { count: 0, clear: () => { rows.length = 0 }, append: row => rows.push(row) }
+  const root = Object.assign({}, ranked, {
+    activeMenu: 'root', filterText: query, rowsLoaded: true, dmenuActive: false, searchDivider: false, layoutSerial: 0,
+    item: id => ranked.items[id] || null,
+    isDescendantOf: (id, ancestorId) => menu.isDescendantOf(ranked.items, id, ancestorId),
+    parentPathFor: id => menu.parentPathFor(ranked.items, id),
+    isVisible: () => true,
+    isDisabled: () => false,
+    searchScore: (entry, q) => menu.searchScore(ranked.items, entry, q),
+    displayRow: (entry, detail, score) => menu.displayRow(ranked.items, ranked.itemOrder, {}, {}, entry, detail, score),
+    settleCursor: () => {},
+    matchesQuery: (entry, q, typos) => menuMatchesQuery(root, menu, displayModel, null, entry, q, typos),
+    rebuildDisplay: typos => menuRebuildDisplay(root, menu, displayModel, { callLater: () => {} }, typos)
+  })
+  root.rebuildDisplay()
+  return rows.map(row => row.itemId)
+}
+assert(searchIds('fnot').includes('appearance.font'), 'menu search retries a search that found nothing, forgiving typos')
+const fontIds = searchIds('font')
+assert(fontIds.includes('appearance.font') && !fontIds.some(id => id.endsWith('.foot')), 'menu search never adds typo matches to a search that found rows')
+
 // Routing: htop ships `Keywords=system;...`, which app rows carry as aliases.
 // An installed app must never capture a menu route (SUPER+ESCAPE opens the
 // `system` menu), while its keywords keep working for search.
